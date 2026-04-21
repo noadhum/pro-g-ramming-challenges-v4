@@ -11,13 +11,9 @@ from urllib.parse import urlparse, unquote
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 import requests
-import tqdm
 
 if not requests:
     raise ModuleNotFoundError("Module 'requests' not found.")
-
-if not tqdm:
-    raise ModuleNotFoundError("Module 'tqdm' not found.")
 
 import file_type
 
@@ -35,17 +31,6 @@ class Info:
     length: Optional[int]
     content_type: str
     accepts_range: str
-
-# trying if i can download these files
-urls = {
-    'png':'https://avatars.githubusercontent.com/u/171996203',
-    'pdf':'https://file-examples.com/wp-content/uploads/2017/10/file-example_PDF_1MB.pdf',
-    'zip':'https://sample-files.com/downloads/compressed/zip/basic-text.zip',
-    'zip2':'https://samplefile.com/samples/download/archive/zip/zip_sample_file_25MB.zip/',
-    'ogg':'https://commondatastorage.googleapis.com/codeskulptor-assets/Evillaugh.ogg',
-
-    'c_dis':'https://miro.medium.com/v2/resize:fit:1222/1*OMzkvx96Stzs7LovaGjTFg.jpeg'
-}
 
 LOCK = threading.Lock()
 
@@ -327,16 +312,26 @@ def main() -> None:
     info = probe(config)
     if not info:
         return
+    print('Probing the server...')
     
     response = requests.get(url=config.url, stream=True)
     fname, temp_ext = resolve_initial_name(response, config, info)
+    print('Getting filename and extension...')
     temp_path = Path(f'{filename or fname}.{temp_ext}')
     config.output = temp_path
 
+    print('Downloading the file...')
     download(config, info)
 
     extension = sniff_extension(config)[-1]
     path = temp_path.with_suffix(f'.{extension}')
     temp_path.replace(path)
 
+    print(f"""
+Downloading done!
+Result:
+    Path: {config.output}
+    Filetype: {file_type.to_type(str(config.output.with_suffix))}
+    Extension: {config.output.suffix}
+""")
 main()
