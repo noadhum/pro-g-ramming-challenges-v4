@@ -1,3 +1,4 @@
+import argparse
 import concurrent.futures
 import json
 import random
@@ -12,6 +13,12 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 import requests
 import tqdm
 
+if not requests:
+    raise ModuleNotFoundError("Module 'requests' not found.")
+
+if not tqdm:
+    raise ModuleNotFoundError("Module 'tqdm' not found.")
+
 import file_type
 
 @dataclass(slots=True)
@@ -20,6 +27,7 @@ class Configuration:
     chunk_size: int
     threads: int 
     output: Optional[Path]
+    resume_path: Path
 
 @dataclass(slots=True)
 class Info:
@@ -82,10 +90,11 @@ def parse_content_disposition(response: requests.Response) -> Optional[List[str]
     result.append(buffer.strip())
     return result
 
-def extract_from_content_disposition(part: str) -> Optional[List[str]]:
+def extract_from_content_disposition(part: str) -> Optional[Tuple[str, str]]:
     for prefix in ('filename*=', 'filename='):
         if part.startswith(prefix):
-            return part[len(prefix):].strip('"').rsplit('.', 1)
+            filename, ext = part[len(prefix):].strip('"').rsplit('.', 1)
+            return filename, ext
     return None
 
 def parse_url_path(config: Configuration) -> Optional[str]:
@@ -95,10 +104,9 @@ def parse_url_path(config: Configuration) -> Optional[str]:
 
 def get_extension_from_type(info: Info) -> str:
     content_type = file_type.split_query_fragment(info.content_type)
-    return file_type.TYPE_TO_EXTENSION.get(content_type, file_type.TYPE_TO_EXTENSION['application/octet-stream'])
+    return file_type.TYPE_TO_EXTENSION.get(content_type, file_type.TYPE_TO_EXTENSION['application/octet-stream'])[0]
 
-def temp_filename_ext(response: requests.Response, config: Configuration, info: Info) -> Tuple[str, str]:
-    # Content-Disposition
+def resolve_initial_name(response: requests.Response, config: Configuration, info: Info) -> Tuple[str, str]:
     content_disposition = response.headers.get('Content-Disposition')
     if content_disposition:
         parts = parse_content_disposition(response)
@@ -106,63 +114,117 @@ def temp_filename_ext(response: requests.Response, config: Configuration, info: 
             if extract_from_content_disposition(part):
                 return extract_from_content_disposition(part)
     
-    # URL Path
     url_path = parse_url_path(config)
     if url_path:
         parts = url_path.split('.')
         if len(parts) > 1:
             return '.'.join(parts[:-1]), parts[-1]
-        return url_path, 'bin'
+        return url_path, 'oadm'
     
-    # Content-Type
     if info.content_type and file_type.valid_type(info.content_type):
         extension = file_type.to_extension(info.content_type)
         return 'download', extension[0]
+    return 'download', 'oadm'
+
+def sniff_extension(config: Configuration) -> Tuple[str, str]:
+    if config.output.exists():
+        size = config.output.stat().st_size
+        if size >= 4096:
+            data = read_binary(config.output, 4096)
+        else:
+            data = read_binary(config.output, None)
+        
+        return 'download', file_type.sniff_bytes(data)
     return 'download', 'bin'
 
-def get_filename_ext(config: Configuration) -> Tuple[str, str]:
-    if config.output.exists():
-        with open(config.output, 'rb') as f:
-            data = f.read()
-        extension = file_type.sniff_bytes(data)
-        return 'download', extension
-    return 'download', 'bin'
     
 def chunk_bytes(config: Configuration, info: Info) -> Generator[Tuple[int, int]]:
     size = (info.length + config.threads - 1) // config.threads
     for start in range(0, info.length, size):
         yield start, min(start + size - 1, info.length - 1)
 
-def download_parts(config: Configuration, info: Info, start: int, end: int):
-        headers = {'Range': f'bytes={start}-{end}'}
-        response = requests.get(url=config.url, headers=headers, stream=True)
-        response.raise_for_status()
-
-        with open(config.output or 'testing.png', 'r+b') as f:
-            f.seek(start)
-            for chunk in response.iter_content(config.chunk_size):
-                if chunk:
-                    f.write(chunk)
+def init_resume(config: Configuration, info: Info) -> Dict[str, str | List[Dict[str, int]]]:
+    if not info.length:
+        return
+    
+    if not config.resume_path.exists():
         
-        with LOCK:
-            # resume json
-            pass
+        json_data = {
+            'url': config.url,
+            'length': info.length,
+            'parts': []
+        }
 
-def multi_thread_download(config: Configuration, info: Info):
-    with open(config.output or 'testing.png', 'w+b') as f:
-            f.truncate(info.length)
+        for index, (start, end) in enumerate(chunk_bytes(config, info)):
+            json_data['parts'].append(
+                {
+                    'index': index,
+                    'start': start,
+                    'end': end,
+                    'downloaded': 0,
+                }
+            )
+
+        write_json(str(config.resume_path), json_data)
+    return str(config.resume_path)
+
+def download_parts(config: Configuration, info: Info, part: Dict[str, int]):
+    index = part['index']
+    start = part['start']
+    end = part['end']
+    
+    if part['downloaded'] >= end - start + 1:
+        return
+
+    resume_start = start + part['downloaded']
+    headers = {'Range': f'bytes={resume_start}-{end}'}
+
+    response = requests.get(url=config.url, headers=headers, stream=True)
+    response.raise_for_status()
+    
+    size = 64 * 1024
+    buffer = 0
+
+    with open(config.output, 'r+b') as f:
+        f.seek(resume_start)
+        for chunk in response.iter_content(config.chunk_size):
+            if chunk:
+                f.write(chunk)
+                buffer += len(chunk)
+
+            if buffer >= size:
+                with LOCK:
+                    data = read_json(config.resume_path)
+                    data['parts'][index]['downloaded'] += buffer
+                    write_json(config.resume_path, data)
+                    buffer = 0
+
+        if buffer > 0:
+            with LOCK:
+                data = read_json(config.resume_path)
+                data['parts'][index]['downloaded'] += buffer
+                write_json(config.resume_path, data)
+
+def multi_thread_download(config: Configuration, info: Info, ):
+    if not config.output.exists():
+        with open(config.output, 'w+b') as f:
+                f.truncate(info.length)
+    
+    resume_path = init_resume(config, info)
+    json_data = read_json(resume_path)
+    parts = json_data['parts']
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.threads) as executor:
         futures = []
-        for start, end in chunk_bytes(config, info):
-            future = executor.submit(download_parts, config, info, start, end)
+        for part in parts:
+            future = executor.submit(download_parts, config, info, part)
             futures.append(future)
 
         for future in futures:
             future.result()
 
 def single_thread_download(config: Configuration):
-    filename = config.output or Path('testing.png')
+    filename = config.output
     existing = filename.stat().st_size if filename.exists() else 0
     headers = {'Range':f'bytes={existing}-'} if existing > 0 else None
     mode = 'ab' if existing > 0 else 'wb'
@@ -180,7 +242,7 @@ def download(config: Configuration, info: Info):
         response = requests.get(url=config.url, stream=True)
         response.raise_for_status()
 
-        with open(config.output or 'testing.png', 'wb') as f:
+        with open(config.output, 'wb') as f:
             for chunk in response.iter_content(config.chunk_size):
                 if chunk:
                     f.write(chunk)
@@ -208,22 +270,73 @@ def format_size(num: int, decimal: bool = False) -> str:
             i += 1
         return f'{num:.2f}{units[i]}'
 
-def read_json(filename: str) -> Dict[str, Any]:
+def read_binary(filename: str | Path, size: Optional[int]) -> bytes:
+    if size:
+        with open(filename, 'rb') as f:
+            return f.read(size)
+    
+    with open(filename, 'rb') as f:
+        return f.read()
+
+# Simple JSON functions
+def read_json(filename: str | Path) -> Dict[str, Any]:
     with open(filename, "r") as f:
         return json.load(f)
     
-def write_json(filename: str, data: Dict[str, Any]) -> None:
+def write_json(filename: str | Path, data: Dict[str, Any]) -> None:
     with open(filename, "w") as f:
         json.dump(data, f, indent=4)
 
 def random_name(length: int = 8) -> str:
-    return ''.join([random.choice(string.ascii_letters + string.digits) for letter in range(length)])
-    
-# r for response, c for config, and i for info, testing variables
-r = requests.get(url=urls['png'])
-c = Configuration(urls['png'], 1024, 4, None)
-i = probe(c)
+    return ''.join([random.choice(string.ascii_letters + string.digits) for c in range(length)])
 
 # -- Main
+def cli() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog='Download Manager (oadm)',
+        description='Simple Downloader made by me (https://github.com/noadhum)',
+        usage='downloader.py <url> [options]',
+        epilog="""
+Examples:
+    downloader.py https://example.com/file
+    downloader.py https://example.com/file -o cat
+""",
+formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    parser.add_argument('url', type=str, help='URL to download')
+    parser.add_argument('-s', '--size', type=int, help='Chunk size in bytes', default=1024)
+    parser.add_argument('-t', '--threads', type=int, help='Number of threads', default=4)
+    parser.add_argument('-o', '--output', type=str, help='Output name (without extension)', default=random_name())
+
+    args = parser.parse_args()
+    return args
+
 def main() -> None:
-    pass
+    args = cli()
+
+    filename = args.output
+
+    config = Configuration(
+        args.url,
+        args.size,
+        args.threads,
+        Path(f"{filename or 'download'}.oadm"),
+        Path(f"{filename or 'resume'}_oadm.json"))
+    
+    info = probe(config)
+    if not info:
+        return
+    
+    response = requests.get(url=config.url, stream=True)
+    fname, temp_ext = resolve_initial_name(response, config, info)
+    temp_path = Path(f'{filename or fname}.{temp_ext}')
+    config.output = temp_path
+
+    download(config, info)
+
+    extension = sniff_extension(config)[-1]
+    path = temp_path.with_suffix(f'.{extension}')
+    temp_path.replace(path)
+
+main()
