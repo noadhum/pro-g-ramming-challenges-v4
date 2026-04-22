@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import Callable, Dict, DefaultDict, List, Generator
 
 EXTENSION_TO_TYPE: Dict[str, List[str]] = {
-    # -- Audio
+    # -- Audio --
     'aac': ['audio/aac', 'audio/x-aac'],
     'flac': ['audio/flac'],
     'm4a': ['audio/mp4'],
@@ -10,7 +10,7 @@ EXTENSION_TO_TYPE: Dict[str, List[str]] = {
     'ogg': ['audio/ogg'],
     'wav': ['audio/wav'],
 
-    # -- Application/Document
+    # -- Application/Document --
     'docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     'pptx': ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
     'xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
@@ -21,13 +21,13 @@ EXTENSION_TO_TYPE: Dict[str, List[str]] = {
     'pyc': ['application/x-python-code'],
     'pyo': ['application/x-python-code'],
 
-    # -- Font
+    # -- Font --
     'otf': ['font/otf'],
     'ttf': ['font/ttf'],
     'woff': ['font/woff'],
     'woff2': ['font/woff2'],
 
-    # -- Image
+    # -- Image --
     'avif': ['image/avif'],
     'bmp': ['image/bmp'],
     'gif': ['image/gif'],
@@ -39,7 +39,7 @@ EXTENSION_TO_TYPE: Dict[str, List[str]] = {
     'tiff': ['image/tiff'],
     'webp': ['image/webp'],
 
-    # -- Package
+    # -- Package --
     '7z': ['application/x-7z-compressed'],
     'bz2': ['application/x-bzip2'],
     'deb': ['application/x-debian-package', 'application/x-deb'],
@@ -51,7 +51,7 @@ EXTENSION_TO_TYPE: Dict[str, List[str]] = {
     'xz': ['application/x-xz'],
     'zip': ['application/zip'],
 
-    # Text/Script
+    # -- Text/Script --
     'css': ['text/css'],
     'csv': ['text/csv'],
     'htm': ['text/html'],
@@ -71,7 +71,7 @@ EXTENSION_TO_TYPE: Dict[str, List[str]] = {
     'xmp': ['application/xml'],
     'yaml': ['application/x-yaml', 'text/yaml', 'application/yaml'],
 
-    # -- Video
+    # -- Video --
     'm4v': ['video/mp4', 'video/x-m4v'],
     'mp4': ['video/mp4'],
     'mpg': ['video/mpeg'],
@@ -79,7 +79,7 @@ EXTENSION_TO_TYPE: Dict[str, List[str]] = {
     'qt': ['video/quicktime'],
     'webm': ['video/webm'],
 
-    # -- Other
+    # -- Other --
     'bin': ['application/octet-stream'],
     'dll': ['application/x-msdownload'],
     'exe': ['application/x-msdownload'],
@@ -95,7 +95,7 @@ TYPE_FUNCTIONS: Dict[str, Callable[[bytes], bool]] = {}
 
 MAX_RANGE = 65536 # 64kb
 
-# -- Main
+# -- Main --
 def sniff_bytes(data: bytes) -> str:
     """
     Sniff the given data and return an extension.
@@ -152,7 +152,7 @@ def valid_type(ftype: str) -> bool:
     
     return ftype in TYPE_TO_EXTENSION
 
-# -- Helper
+# -- Helper --
 def split_query_fragment(filename_or_extension_or_type: str) -> str:
     if not isinstance(filename_or_extension_or_type, str):
         raise TypeError("Error: 'filename_or_extension' is not a string")
@@ -168,15 +168,15 @@ def _possible_extensions(parts: List[str]) -> Generator[str]:
         if parts[i+1:]:
             yield '.'.join(parts[i+1:])
 
-# -- Decorator
+# -- Decorator --
 def add_filetype(ext: str) -> Callable:
     def wrapper(func: Callable[[bytes], bool]) -> Callable[[bytes], bool]:
         TYPE_FUNCTIONS[ext.lower()] = func
         return func
     return wrapper
 
-# -- is_filetype Functions
-# - Audio
+# -- Functions --
+# - Audio -
 @add_filetype('aac')
 def is_aac(data: bytes) -> bool:
     """
@@ -229,7 +229,7 @@ def is_wav(data: bytes) -> bool:
     """
     return (len(data) >= 12 and (data[0:4] == b'\x52\x49\x46\x46' and data[8:12] == b'\x57\x41\x56\x45'))
 
-# - Application/Document
+# - Application/Document -
 @add_filetype('docx')
 def is_docx(data: bytes) -> bool:
     """
@@ -360,7 +360,7 @@ def is_woff2(data: bytes) -> bool:
     """
     return (len(data) >= 4 and data[0:4] == b'\x77\x4F\x46\x32')
 
-# - Image
+# - Image -
 @add_filetype('avif')
 def is_avif(data: bytes) -> bool:
     """
@@ -427,7 +427,7 @@ def is_webp(data: bytes) -> bool:
     """
     return (len(data) >= 12 and (data[0:4] ==  b'\x52\x49\x46\x46' and data[8:12] == b'\x57\x45\x42\x50'))
 
-# - Package
+# - Package -
 @add_filetype('7z')
 def is_7z(data: bytes) -> bool:
     """
@@ -500,7 +500,7 @@ def is_zip(data: bytes) -> bool:
     """
     return (len(data) >= 4 and (data[0:4] in (b'\x50\x4B\x03\x04', b'\x50\x4B\x05\x06', b'\x50\x4B\x07\x08')))
 
-# - Text/Script
+# - Text/Script -
 @add_filetype('xml')
 def is_xml(data: bytes) -> bool:
     """
@@ -509,7 +509,7 @@ def is_xml(data: bytes) -> bool:
     return (len(data) >= 100
             and (data.lstrip().startswith(b'\x3C\x3F\x78\x6D\x6C')))
 
-# - Video
+# - Video -
 @add_filetype('m4v')
 def is_m4v(data: bytes) -> bool:
     """

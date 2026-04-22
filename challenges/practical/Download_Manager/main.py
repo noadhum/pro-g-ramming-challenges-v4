@@ -1,0 +1,1 @@
+DEFAULT_UA = 'OADownloadManager/1.0'
