@@ -5,9 +5,10 @@ from typing import Optional
 @dataclass(slots=True)
 class Input:
     url: str
-    threads: int
     chunk_size: int
-    output: Path
+    threads: int
+    file_path: Path
+    resume: bool
     user_agent: str
 
 @dataclass(slots=True)

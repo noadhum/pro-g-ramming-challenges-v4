@@ -1,3 +1,5 @@
+# TODO: refactor this file bcuz its ugly
+
 from collections import defaultdict
 from typing import Callable, Dict, DefaultDict, List, Generator
 
@@ -110,8 +112,6 @@ def to_type(filename_or_extension: str) -> List[str]:
     """
     Convert filename or extension into possible MIME Types.
     """
-    if not isinstance(filename_or_extension, str):
-        raise TypeError("Error: 'filename_or_extension' is not a string")
     
     file_parts = split_query_fragment(filename_or_extension).lower().split('.')
 
@@ -127,8 +127,6 @@ def to_extension(content_type: str) -> List[str]:
     """
     Convert Content-Type into possible extensions.
     """
-    if not isinstance(content_type, str):
-        raise TypeError("Error: 'filename_or_extension' is not a string")
 
     file_type = split_query_fragment(content_type).lower().strip()
     return TYPE_TO_EXTENSION.get(file_type, TYPE_TO_EXTENSION['application/octet-stream'])
@@ -137,8 +135,6 @@ def valid_ext(filename_or_extension: str) -> bool:
     """
     Check if given extension is valid.
     """
-    if not isinstance(filename_or_extension, str):
-        raise TypeError("Error: 'filename_or_extension' is not a string")
     
     extension = split_query_fragment(filename_or_extension).split('.')[-1]
     return extension in EXTENSION_TO_TYPE
@@ -147,15 +143,11 @@ def valid_type(ftype: str) -> bool:
     """
     Check if given Content/Media Type is valid.
     """
-    if not isinstance(ftype, str):
-        raise TypeError("Error: 'ftype' is not a string")
     
     return ftype in TYPE_TO_EXTENSION
 
 # -- Helper --
 def split_query_fragment(filename_or_extension_or_type: str) -> str:
-    if not isinstance(filename_or_extension_or_type, str):
-        raise TypeError("Error: 'filename_or_extension' is not a string")
     
     for prefix in ('?', '#', '&', ';'):
         if prefix in filename_or_extension_or_type:
@@ -169,7 +161,7 @@ def _possible_extensions(parts: List[str]) -> Generator[str]:
             yield '.'.join(parts[i+1:])
 
 # -- Decorator --
-def add_filetype(ext: str) -> Callable:
+def add_filetype(ext: str):
     def wrapper(func: Callable[[bytes], bool]) -> Callable[[bytes], bool]:
         TYPE_FUNCTIONS[ext.lower()] = func
         return func
@@ -501,6 +493,17 @@ def is_zip(data: bytes) -> bool:
     return (len(data) >= 4 and (data[0:4] in (b'\x50\x4B\x03\x04', b'\x50\x4B\x05\x06', b'\x50\x4B\x07\x08')))
 
 # - Text/Script -
+@add_filetype('html')
+def is_html(data: bytes) -> bool:
+    """
+    Check if given bytes represent an HTML file.
+
+    Not 100% accurate
+    """
+    return (b'<htm' in data.lower()
+            or b'<?doctype' in data.lower()
+            )
+
 @add_filetype('xml')
 def is_xml(data: bytes) -> bool:
     """

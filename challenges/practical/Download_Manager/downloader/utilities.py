@@ -1,7 +1,10 @@
+import random
+import string
+
 from typing import Generator, List, Optional, Tuple
 from urllib.parse import urlparse, unquote
 
-import file_type
+from .file_type import split_query_fragment, TYPE_TO_EXTENSION
 
 # -- Chunking --
 def chunk_bytes(length: int, threads: int) -> Generator[Tuple[int, int]]:
@@ -11,6 +14,17 @@ def chunk_bytes(length: int, threads: int) -> Generator[Tuple[int, int]]:
 
 # -- Parsing --
 def _parse_disposition(content: str) -> List[str]:
+    """
+    Parsing 'Content-Disposition' header into pieces.
+
+    Example: inline; filename*="cat" -> ['inline', 'filename*="cat.png"']
+
+    Args:
+        content: A 'Content-Disposition' header,
+
+    Returns:
+        List[str]: A list containing parsed 'Content-Disposition' header.
+    """
     buffer = ''
     result: List[str] = []
     in_quote = False
@@ -33,6 +47,11 @@ def _parse_disposition(content: str) -> List[str]:
 def resolve_filename(content: str) -> Optional[Tuple[str, str]]:
     """
     Resolve the download filename and its extension.
+
+    Example: 'inline; filename*="cat"' -> ('cat', 'png') or ('cat', 'bin')
+    
+    Args:
+        content: A 'Content-Disposition' header,
 
     Returns:
         Tuple[str, str]: A pair containing (filename, extension).
@@ -58,6 +77,11 @@ def parse_url(url: str) -> Tuple[str, str]:
     """
     Parse the file url.
 
+    Example: 'https://site.com/cat.png' -> ('cat', 'png')
+
+    Args:
+        url: URL of a file,
+
     Returns:
         Tuple[str, str]: A pair containing (filename, extension)
     """
@@ -74,13 +98,27 @@ def guess_extension(type: str) -> Tuple[str, str]:
     """
     Guess file extension from its mime type.
 
+    Example:
+        'text/html' -> ('download', 'html')
+        In the example, 'download' is a placeholder for a filename
+
     Returns:
         Tuple[str, str]: A pair containing (filename, extension)
     """
 
-    mime_type = file_type.split_query_fragment(type)
+    mime_type = split_query_fragment(type)
     return (
         'download',
-        file_type.TYPE_TO_EXTENSION.get(mime_type,
-        file_type.TYPE_TO_EXTENSION['application/octet-stream'])[0]
+        TYPE_TO_EXTENSION.get(mime_type,
+        TYPE_TO_EXTENSION['application/octet-stream'])[0]
+    )
+
+# -- Random --
+def random_name(length: int = 8) -> str:
+    text = string.ascii_letters + string.digits
+    return (
+        ''.join([
+        random.choice(text)
+        for _ in range(length)
+        ])
     )
