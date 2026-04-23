@@ -10,7 +10,14 @@ def cli() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog='OADownloadManager',
         description='A simple download manager.',
-        usage=f'{__name__}.py <url> [options]',
+        usage=f'main.py <url> [options]',
+        epilog=
+        """
+Examples:
+
+    main.py https://example.com/file.ext
+    main.py https://example.com/file.ext -o cat
+        """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -18,6 +25,13 @@ def cli() -> argparse.Namespace:
         'url',
         type=str,
         help='URL of the file to download'
+    )
+
+    parser.add_argument(
+        '-c', '--chunk-size',
+        type=int,
+        help='Chunk size in KB',
+        default=64,
     )
 
     parser.add_argument(
@@ -45,13 +59,6 @@ def cli() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        '-c', '--chunk-size',
-        type=int,
-        help='Chunk size in KB',
-        default=64,
-    )
-
-    parser.add_argument(
         '-t', '--threads',
         type=int,
         help='Number of download threads',
@@ -71,15 +78,16 @@ def main() -> None:
     args = cli()
     
     filename = args.output or random_name()
-    output = Path(f'{filename}.oadm')
-    resume_path = Path(args.resume_path) if args.resume_path else Path(f'{filename}_oadm.json')
+    resume = args.resume_path or f'{filename}_oadm.json'
+    temp_output = Path(__file__).parent / f'{filename}.oadm'
+    resume_path = Path(__file__).parent / resume
 
     user_input = Input(
         args.url,
         args.chunk_size,
         args.threads,
         args.allow_html,
-        output,
+        temp_output,
         args.resume,
         resume_path,
         args.user_agent
@@ -96,11 +104,15 @@ def main() -> None:
         extension = 'bin'
 
     if extension == 'bin':
-        file_data = read_binary(user_input.file_path)
+        file_data = read_binary(user_input.file_path, 8 * 1024)
         extension = guess_from_bytes(file_data)
+        if extension == 'bin':
+            file_data = read_binary(user_input.file_path)
+            extension = guess_from_bytes(file_data)
     
-    new_filename = output.with_suffix(f'.{extension}')
-    if output.exists():
-        output.replace(new_filename)
+    output = temp_output.with_suffix(f'.{extension}')
+    
+    if temp_output.exists() and downloader.is_complete():
+        temp_output.replace(output)
 
 main()

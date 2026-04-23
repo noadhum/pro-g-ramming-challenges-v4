@@ -169,3 +169,12 @@ class Downloader:
             return self.multi_thread()
         
         return self.single_thread()
+    
+    def is_complete(self):
+        self.resume.load()
+
+        parts = self.resume.data['parts']
+        if not parts:
+            return
+        
+        return all(part.get('done') for part in parts)
