@@ -11,7 +11,7 @@ except ImportError:
     raise ModuleNotFoundError("Error: required 'requests' library not found, install it with: 'pip install requests'")
 
 class HTTPClient:
-    def __init__(self, ua: str = 'OADownloadManager/1.0') -> None:
+    def __init__(self, ua: str) -> None:
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': ua})
     
@@ -65,7 +65,6 @@ class Downloader:
         self.client = client
         self.info = info
         self.resume = Resume(self.input.resume_path)
-
         Validator(self.input, self.info).validate()
 
     def single_thread(self):

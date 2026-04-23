@@ -4,7 +4,7 @@ from pathlib import Path
 
 from downloader.model import Input
 from downloader.download import Downloader, HTTPClient
-from downloader.utilities import random_name
+from downloader.utilities import random_name, read_binary, guess_from_metadata, guess_from_bytes
 
 def cli() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -64,7 +64,7 @@ def cli() -> argparse.Namespace:
         help='User-Agent header for HTTP requests',
         default='OADownloadManager/1.0'
     )
-    
+
     return parser.parse_args()
 
 def main() -> None:
@@ -85,10 +85,22 @@ def main() -> None:
         args.user_agent
     )
     
-    client = HTTPClient()
+    client = HTTPClient(args.user_agent)
     info = client.probe(user_input.url)
 
     downloader = Downloader(user_input, client, info)
     downloader.download()
+
+    extension = guess_from_metadata(info)
+    if not extension:
+        extension = 'bin'
+
+    if extension == 'bin':
+        file_data = read_binary(user_input.file_path)
+        extension = guess_from_bytes(file_data)
+    
+    new_filename = output.with_suffix(f'.{extension}')
+    if output.exists():
+        output.replace(new_filename)
 
 main()

@@ -2,8 +2,10 @@ import random
 import string
 
 from typing import Generator, List, Optional, Tuple
+from pathlib import Path
 from urllib.parse import urlparse, unquote
 
+from .model import FileInfo
 from .types.data import EXTENSIONS, TYPES, FUNCTIONS
 
 # -- Chunking --
@@ -44,22 +46,22 @@ def _parse_disposition(content: str) -> List[str]:
         result.append(buffer.strip())
     return result
 
-def resolve_filename(content: str) -> Optional[Tuple[str, str]]:
+def resolve_filename(content: str) -> str:
     """
     Resolve the download filename and its extension.
 
-    Example: 'inline; filename*="cat"' -> ('cat', 'png') or ('cat', 'bin')
+    Example: 'inline; filename*="cat.png"' -> 'png' or 'bin'
     
     Args:
         content: A 'Content-Disposition' header,
 
     Returns:
-        Tuple[str, str]: A pair containing (filename, extension).
+        Optional[str]: File extension
     """
 
     parts = _parse_disposition(content)
     if not parts:
-        return
+        return 'bin'
     
     for part in parts:
         for prefix in ('filename*=', 'filename='):
@@ -67,32 +69,32 @@ def resolve_filename(content: str) -> Optional[Tuple[str, str]]:
                 filename = part[len(prefix):].strip('"')
 
                 if '.' not in part:
-                    return filename, 'bin'
+                    return 'bin'
                 
-                filename, extension = filename.rsplit('.')
-                return filename, extension
-    return None
+                extension = filename.rsplit('.')[-1]
+                return extension
+    return 'bin'
 
-def parse_url(url: str) -> Tuple[str, str]:
+def parse_url(url: str) -> str:
     """
     Parse the file url.
 
-    Example: 'https://example.com/cat.png' -> ('cat', 'png')
+    Example: 'https://example.com/cat.png' -> 'png'
 
     Args:
         url: URL of a file,
 
     Returns:
-        Tuple[str, str]: A pair containing (filename, extension)
+        str: File extension 
     """
 
     path = urlparse(url).path
     fullname = unquote(path.rsplit('/', 1)[-1])
     if '.' not in fullname:
-        return fullname, 'bin'
+        return 'bin'
     
-    filename, extension = fullname.rsplit('.', 1)
-    return filename, extension
+    extension = fullname.rsplit('.', 1)[-1]
+    return extension
 
 def parse_query(name_or_type: str) -> str:
     """
@@ -100,7 +102,7 @@ def parse_query(name_or_type: str) -> str:
 
     Example:
         'download.bin?query...' -> 'download.bin'
-        'text/html; charset="utf-8";' -> 'text.html'
+        'text/html; charset="utf-8";' -> 'text/html'
     
     Returns:
         str: Parsed filename or extension
@@ -112,11 +114,35 @@ def parse_query(name_or_type: str) -> str:
             return extension
     return name_or_type
 
+def guess_from_metadata(info: FileInfo) -> str:
+    if info.content_disposition:
+        ext = resolve_filename(info.content_disposition)
+        if ext != 'bin':
+            return ext
+        
+    ext = parse_url(info.url)
+    if ext != 'bin':
+        return ext
+    
+    ext_list = guess_extension(info.mime_type)
+    if ext_list:
+        return ext_list[0]
+    return 'bin'
+
 # -- Extension-Related --
-def _possible_extensions(parts: List[str]) -> Generator[str]:
-    for i, _ in enumerate(parts):
-        if parts[i+1:]:
-            yield '.'.join(parts[i+1:])
+def guess_from_bytes(data: bytes) -> str:
+    """
+    Guess given bytes into extension.
+
+    Example:
+        bytes of a png file... -> 'png'
+    """
+
+    for extension in TYPES:
+        func = FUNCTIONS.get(extension)
+        if func and func(data):
+            return extension
+    return 'bin'
 
 def guess_extension(type: str) -> List[str]:
     """
@@ -135,6 +161,11 @@ def guess_extension(type: str) -> List[str]:
         EXTENSIONS.get(mime_type,
         EXTENSIONS['application/octet-stream'])
     )
+
+def _possible_extensions(parts: List[str]) -> Generator[str]:
+    for i, _ in enumerate(parts):
+        if parts[i+1:]:
+            yield '.'.join(parts[i+1:])
 
 def guess_type(name_or_extension: str) -> List[str]:
     """
@@ -157,21 +188,11 @@ def guess_type(name_or_extension: str) -> List[str]:
             return TYPES[extension]
     return TYPES['bin']
 
-def guess_from_bytes(data: bytes) -> str:
-    """
-    Guess given bytes into extension.
+# -- Other --
+def read_binary(file_path: Path, size: Optional[int] = 64 * 1024):
+    with open(file_path, 'rb') as f:
+        return f.read(size)
 
-    Example:
-        b'\x89\x50\x4E\x47' -> 'png'
-    """
-
-    for extension in TYPES:
-        func = FUNCTIONS.get(extension)
-        if func and func(data):
-            return extension
-    return 'bin'
-
-# -- Random --
 def random_name(length: int = 8) -> str:
     text = string.ascii_letters + string.digits
     return (
@@ -180,3 +201,11 @@ def random_name(length: int = 8) -> str:
         for _ in range(length)
         ])
     )
+
+def format_size(num: float) -> str:
+    i = 0
+    units = ['KB', 'MB', 'GB', 'TB']
+    while num >= 1024 and i < len(units) - 1:
+        num /= 1024
+        i += 1
+    return f'{num:.2f}{units[i]}'
