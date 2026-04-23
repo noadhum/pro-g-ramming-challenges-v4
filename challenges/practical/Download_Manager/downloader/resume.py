@@ -1,4 +1,6 @@
 import json
+import time
+import threading
 
 from pathlib import Path
 from typing import Any, Dict
@@ -9,6 +11,7 @@ class JSON:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.data: Dict[str, Any] = {}
+        self._lock = threading.Lock()
 
     def create(self, data: Dict[str, Any]) -> None:
         """
@@ -36,10 +39,12 @@ class JSON:
         """
         Save current data to file.
         """
-        
-        with open(self.path, 'w') as f:
+
+        tmp = self.path.with_suffix('.tmp')
+        with open(tmp, 'w') as f:
             json.dump(self.data, f, indent=4)
 
+        tmp.replace(self.path)
     def delete(self) -> None:
         """
         Delete JSON file.
@@ -50,15 +55,27 @@ class JSON:
         
         self.path.unlink()
         self.data = {}
+    
+    def set(self, attr: str, val: Any) -> None:
+        self.data[attr] = val
+    
+    def get(self, attr: str) -> Any:
+        return self.data.get(attr)
 
 class Resume(JSON):
     def __init__(self, path: Path) -> None:
+        self._last_save = time.time()
+        self._interval = 1.0
+
         super().__init__(path)
 
     def initialize(self, url: str, length: int, threads: int):
         data: Dict[str, Any] = {
-            'url': url,
-            'length': length,
+            'data': {
+                'url': url,
+                'length': length,
+                'threads': threads,
+            },
             'parts': []
         }
 
@@ -69,7 +86,30 @@ class Resume(JSON):
                     'start': start,
                     'end': end,
                     'downloaded': 0,
+                    'done': False
                 }
             )  
 
-        self.create(data)
+        if not self.path.exists():
+            self.create(data)
+        else:
+            self.load()
+            if self.data['data']['url'] != url:
+                raise ValueError('Resume file url mismatch.')
+    
+    def _in_cooldown(self) -> bool:
+        now = time.time()
+        return (now - self._last_save >= self._interval)
+    
+    def update_part(self, index: int, buffer: int):
+        with self._lock:
+            part = self.data['parts'][index]
+            total = part['end'] - part['start'] + 1
+            part['downloaded'] = min(part['downloaded'] + buffer, total)
+
+            if part['downloaded'] >= (part['end'] - part['start'] + 1):
+                part['done'] = True
+            
+            if not self._in_cooldown():
+                self._last_save = time.time()
+                self.save()

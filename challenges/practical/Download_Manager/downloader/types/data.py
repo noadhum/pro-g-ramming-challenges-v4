@@ -1,9 +1,7 @@
-# TODO: refactor this file bcuz its ugly
-
 from collections import defaultdict
-from typing import Callable, Dict, DefaultDict, List, Generator
+from typing import Callable, Dict, DefaultDict, List
 
-EXTENSION_TO_TYPE: Dict[str, List[str]] = {
+TYPES: Dict[str, List[str]] = {
     # -- Audio --
     'aac': ['audio/aac', 'audio/x-aac'],
     'flac': ['audio/flac'],
@@ -87,96 +85,31 @@ EXTENSION_TO_TYPE: Dict[str, List[str]] = {
     'exe': ['application/x-msdownload'],
 }
 
-TYPE_TO_EXTENSION: DefaultDict[str, List[str]] = defaultdict(list)
+EXTENSIONS: DefaultDict[str, List[str]] = defaultdict(list)
 
-for key, value in EXTENSION_TO_TYPE.items():
-    for filetype in value:
-        TYPE_TO_EXTENSION[filetype].append(key)
+for key, value in TYPES.items():
+    for type in value:
+        EXTENSIONS[type].append(key)
 
-TYPE_FUNCTIONS: Dict[str, Callable[[bytes], bool]] = {}
+FUNCTIONS: Dict[str, Callable[[bytes], bool]] = {}
 
-MAX_RANGE = 65536 # 64kb
+MAX_RANGE = 64 * 1024
 
-# -- Main --
-def sniff_bytes(data: bytes) -> str:
-    """
-    Sniff the given data and return an extension.
-    """
-    for ext in EXTENSION_TO_TYPE:
-        func = TYPE_FUNCTIONS.get(ext)
-        if func and func(data):
-            return ext
-    return 'bin'
-
-def to_type(filename_or_extension: str) -> List[str]:
-    """
-    Convert filename or extension into possible MIME Types.
-    """
-    
-    file_parts = split_query_fragment(filename_or_extension).lower().split('.')
-
-    if len(file_parts) <= 1:
-        return EXTENSION_TO_TYPE.get(file_parts[0], EXTENSION_TO_TYPE['bin'])
-
-    for extension in _possible_extensions(file_parts):
-        if extension in EXTENSION_TO_TYPE:
-            return EXTENSION_TO_TYPE[extension]
-    return EXTENSION_TO_TYPE['bin']
-
-def to_extension(content_type: str) -> List[str]:
-    """
-    Convert Content-Type into possible extensions.
-    """
-
-    file_type = split_query_fragment(content_type).lower().strip()
-    return TYPE_TO_EXTENSION.get(file_type, TYPE_TO_EXTENSION['application/octet-stream'])
-
-def valid_ext(filename_or_extension: str) -> bool:
-    """
-    Check if given extension is valid.
-    """
-    
-    extension = split_query_fragment(filename_or_extension).split('.')[-1]
-    return extension in EXTENSION_TO_TYPE
-
-def valid_type(ftype: str) -> bool:
-    """
-    Check if given Content/Media Type is valid.
-    """
-    
-    return ftype in TYPE_TO_EXTENSION
-
-# -- Helper --
-def split_query_fragment(filename_or_extension_or_type: str) -> str:
-    
-    for prefix in ('?', '#', '&', ';'):
-        if prefix in filename_or_extension_or_type:
-            extension = filename_or_extension_or_type.split(prefix, 1)[0]
-            return extension
-    return filename_or_extension_or_type
-
-def _possible_extensions(parts: List[str]) -> Generator[str]:
-    for i, _ in enumerate(parts):
-        if parts[i+1:]:
-            yield '.'.join(parts[i+1:])
-
-# -- Decorator --
-def add_filetype(ext: str):
+# -- Decorator
+def filetype(extension: str):
     def wrapper(func: Callable[[bytes], bool]) -> Callable[[bytes], bool]:
-        TYPE_FUNCTIONS[ext.lower()] = func
+        FUNCTIONS[extension.lower()] = func
         return func
     return wrapper
 
-# -- Functions --
-# - Audio -
-@add_filetype('aac')
+@filetype('aac')
 def is_aac(data: bytes) -> bool:
     """
     Check if given bytes represents a AAC file.
     """
     return (len(data) >= 2 and (data[0:2] in (b'\xFF\xF1', b'\xFF\xF9')))
 
-@add_filetype('flac')
+@filetype('flac')
 def is_flac(data: bytes) -> bool:
     """
     Check if given bytes represents a FLAC file.
@@ -184,7 +117,7 @@ def is_flac(data: bytes) -> bool:
     return (len(data) >= 4
             and (data[0:4] == b'\x66\x4C\x61\x43'))
 
-@add_filetype('m4a')
+@filetype('m4a')
 def is_m4a(data: bytes) -> bool:
     """
     Check if given bytes represents a M4A file.
@@ -192,7 +125,7 @@ def is_m4a(data: bytes) -> bool:
     return (len(data) >= 11 and (data[0:4] == b'\x4D\x34\x41\x20'
             or data[4:11] == b'\x66\x74\x79\x70\x4D\x34\x41'))
 
-@add_filetype('mp3')
+@filetype('mp3')
 def is_mp3(data: bytes) -> bool:
     """
     Check if given bytes represents a MP3 file.
@@ -205,7 +138,7 @@ def is_mp3(data: bytes) -> bool:
             return True
     return False
 
-@add_filetype('ogg')
+@filetype('ogg')
 def is_ogg(data: bytes) -> bool:
     """
     Check if given bytes represents a OGG file.
@@ -214,7 +147,7 @@ def is_ogg(data: bytes) -> bool:
             and data[0:4] == b'\x4F\x67\x67\x53'
             and data[4:8] != b'\x00\x02\x00\x00')
 
-@add_filetype('wav')
+@filetype('wav')
 def is_wav(data: bytes) -> bool:
     """
     Check if given bytes represents a WAV file.
@@ -222,7 +155,7 @@ def is_wav(data: bytes) -> bool:
     return (len(data) >= 12 and (data[0:4] == b'\x52\x49\x46\x46' and data[8:12] == b'\x57\x41\x56\x45'))
 
 # - Application/Document -
-@add_filetype('docx')
+@filetype('docx')
 def is_docx(data: bytes) -> bool:
     """
     Check if given bytes represents a DOCX file.
@@ -231,7 +164,7 @@ def is_docx(data: bytes) -> bool:
         return b'word/' in data
     return False
 
-@add_filetype('pptx')
+@filetype('pptx')
 def is_pptx(data: bytes) -> bool:
     """
     Check if given bytes represents a PPTX file.
@@ -240,7 +173,7 @@ def is_pptx(data: bytes) -> bool:
         return b'ppt/' in data
     return False
 
-@add_filetype('xlsx')
+@filetype('xlsx')
 def is_xlsx(data: bytes) -> bool:
     """
     Check if given bytes represents a XLSX file.
@@ -249,7 +182,7 @@ def is_xlsx(data: bytes) -> bool:
         return b'xl/' in data
     return False
 
-@add_filetype('doc')
+@filetype('doc')
 def is_doc(data: bytes) -> bool:
     """
     Check if given bytes represents a DOC file.
@@ -270,7 +203,7 @@ def is_doc(data: bytes) -> bool:
 
     return False
 
-@add_filetype('ppt')
+@filetype('ppt')
 def is_ppt(data: bytes) -> bool:
     """
     Check if given bytes represents a PPT file.
@@ -294,7 +227,7 @@ def is_ppt(data: bytes) -> bool:
 
     return False
 
-@add_filetype('xls')
+@filetype('xls')
 def is_xls(data: bytes) -> bool:
     """
     Check if given bytes represents a XLS file.
@@ -315,7 +248,7 @@ def is_xls(data: bytes) -> bool:
         
     return False
 
-@add_filetype('pdf')
+@filetype('pdf')
 def is_pdf(data: bytes) -> bool:
     """
     Check if given bytes represents a PDF file.
@@ -323,14 +256,14 @@ def is_pdf(data: bytes) -> bool:
     return (len(data) >= 4 and (data[0:4] == b'\x25\x50\x44\x46'))
 
 # - Font
-@add_filetype('otf')
+@filetype('otf')
 def is_otf(data: bytes) -> bool:
     """
     Check if given bytes represents an OTF file..
     """
     return (len(data) >= 5 and data[0:5] == b'\x4F\x54\x54\x4F\x00')
 
-@add_filetype('ttf')
+@filetype('ttf')
 def is_ttf(data: bytes) -> bool:
     """
     Check if given bytes represents a TTF file.
@@ -338,14 +271,14 @@ def is_ttf(data: bytes) -> bool:
     return (len(data) >= 5 and (
         data[0:5] in (b'\x00\x01\x00\x00\x00', b'\x74\x72\x75\x65\x00')))
 
-@add_filetype('woff')
+@filetype('woff')
 def is_woff(data: bytes) -> bool:
     """
     Check if given bytes represents a WOFF file.
     """
     return (len(data) >= 4 and data[0:4] == b'\x77\x4F\x46\x46')
 
-@add_filetype('woff2')
+@filetype('woff2')
 def is_woff2(data: bytes) -> bool:
     """
     Check if given bytes represents a WOFF2 file.
@@ -353,56 +286,56 @@ def is_woff2(data: bytes) -> bool:
     return (len(data) >= 4 and data[0:4] == b'\x77\x4F\x46\x32')
 
 # - Image -
-@add_filetype('avif')
+@filetype('avif')
 def is_avif(data: bytes) -> bool:
     """
     Check if given bytes represents a AVIF file.
     """
     return (len(data) >= 12 and data[4:12] == b'\x66\x74\x79\x70\x61\x76\x69\x66')
 
-@add_filetype('bmp')
+@filetype('bmp')
 def is_bmp(data: bytes) -> bool:
     """
     Check if given bytes represents a BMP file.
     """
     return (len(data) >= 2 and data[0:2] == b'\x42\x4D')
 
-@add_filetype('gif')
+@filetype('gif')
 def is_gif(data: bytes) -> bool:
     """
     Check if given bytes represents a GIF file.
     """
     return (len(data) >= 3 and data[0:3] == b'\x47\x49\x46')
 
-@add_filetype('heic')
+@filetype('heic')
 def is_heic(data: bytes) -> bool:
     """
     Check if given bytes represents a HEIC file.
     """
     return (len(data) >= 12 and data[4:12] == b'\x66\x74\x79\x70\x68\x65\x69\x63')
 
-@add_filetype('ico')
+@filetype('ico')
 def is_ico(data: bytes) -> bool:
     """
     Check if given bytes represents an ICO file.
     """
     return (len(data) >= 4 and data[0:4] == b'\x00\x00\x01\x00')
 
-@add_filetype('jpg')
+@filetype('jpg')
 def is_jpg(data: bytes) -> bool:
     """
     Check if given bytes represents a JPG file.
     """
     return (len(data) >= 3 and data[0:3] == b'\xFF\xD8\xFF')
 
-@add_filetype('png')
+@filetype('png')
 def is_png(data: bytes) -> bool:
     """
     Check if given bytes represents a PNG file.
     """
     return (len(data) >= 4 and data[0:4] == b'\x89\x50\x4E\x47')
 
-@add_filetype('tiff')
+@filetype('tiff')
 def is_tiff(data: bytes) -> bool:
     """
     Check if given bytes represents a TIF/TIFF file.
@@ -412,7 +345,7 @@ def is_tiff(data: bytes) -> bool:
             return True
     return False
 
-@add_filetype('webp')
+@filetype('webp')
 def is_webp(data: bytes) -> bool:
     """
     Check if given bytes represents a WEBP file.
@@ -420,21 +353,21 @@ def is_webp(data: bytes) -> bool:
     return (len(data) >= 12 and (data[0:4] ==  b'\x52\x49\x46\x46' and data[8:12] == b'\x57\x45\x42\x50'))
 
 # - Package -
-@add_filetype('7z')
+@filetype('7z')
 def is_7z(data: bytes) -> bool:
     """
     Check if given bytes represents a 7Z file.
     """
     return (len(data) >= 6 and data[0:6] == b'\x37\x7A\xBC\xAF\x27\x1C')
 
-@add_filetype('bz2')
+@filetype('bz2')
 def is_bz2(data: bytes) -> bool:
     """
     Check if given bytes represents a BZ2 file.
     """
     return (len(data) >= 3 and data[0:3] == b'\x42\x5A\x68')
 
-@add_filetype('deb')
+@filetype('deb')
 def is_deb(data: bytes) -> bool:
     """
     Check if given bytes represents a DEB file.
@@ -442,21 +375,21 @@ def is_deb(data: bytes) -> bool:
     return (len(data) >= 21
             and data[0:21] == b'\x21\x3C\x61\x72\x63\x68\x3E\x0A\x64\x65\x62\x69\x61\x6E\x2D\x62\x69\x6E\x61\x72\x79')
 
-@add_filetype('dmg')
+@filetype('dmg')
 def is_dmg(data: bytes) -> bool:
     """
     Check if given bytes represents a DMG file.
     """
     return (len(data) >= 4 and data[0:4] == b'\x6B\x6F\x6C\x79')
 
-@add_filetype('gz')
+@filetype('gz')
 def is_gz(data: bytes) -> bool:
     """
     Check if given bytes represents a GZ file.
     """
     return (len(data) >= 3 and data[0:3] == b'\x1F\x8B\x08')
 
-@add_filetype('rar')
+@filetype('rar')
 def is_rar(data: bytes) -> bool:
     """
     Check if given bytes represents a RAR file.
@@ -464,28 +397,28 @@ def is_rar(data: bytes) -> bool:
     return (len(data) >= 7
             and (data[0:7] in (b'\x52\x61\x72\x21\x1A\x07\x00', b'\x52\x61\x72\x21\x1A\x07\x01')))
 
-@add_filetype('rpm')
+@filetype('rpm')
 def is_rpm(data: bytes) -> bool:
     """
     Check if given bytes represents a RPM file.
     """
     return (len(data) >= 4 and data[0:4] == b'\xED\xAB\xEE\xDB')
 
-@add_filetype('tar')
+@filetype('tar')
 def is_tar(data: bytes) -> bool:
     """
     Check if given bytes represents a TAR file.
     """
     return (len(data) >= 262 and data[257:262] == b'\x75\x73\x74\x61\x72')
 
-@add_filetype('xz')
+@filetype('xz')
 def is_xz(data: bytes) -> bool:
     """
     Check if given bytes represents a XZ file.
     """
     return (len(data) >= 6 and data[0:6] == b'\xFD\x37\x7A\x58\x5A\x00')
 
-@add_filetype('zip')
+@filetype('zip')
 def is_zip(data: bytes) -> bool:
     """
     Check if given bytes represents a ZIP file.
@@ -493,7 +426,7 @@ def is_zip(data: bytes) -> bool:
     return (len(data) >= 4 and (data[0:4] in (b'\x50\x4B\x03\x04', b'\x50\x4B\x05\x06', b'\x50\x4B\x07\x08')))
 
 # - Text/Script -
-@add_filetype('html')
+@filetype('html')
 def is_html(data: bytes) -> bool:
     """
     Check if given bytes represent an HTML file.
@@ -504,7 +437,7 @@ def is_html(data: bytes) -> bool:
             or b'<?doctype' in data.lower()
             )
 
-@add_filetype('xml')
+@filetype('xml')
 def is_xml(data: bytes) -> bool:
     """
     Check if given bytes represents a XML file.
@@ -513,7 +446,7 @@ def is_xml(data: bytes) -> bool:
             and (data.lstrip().startswith(b'\x3C\x3F\x78\x6D\x6C')))
 
 # - Video -
-@add_filetype('m4v')
+@filetype('m4v')
 def is_m4v(data: bytes) -> bool:
     """
     Check if given bytes represents a M4V file.
@@ -521,7 +454,7 @@ def is_m4v(data: bytes) -> bool:
     return (len(data) >= 11
             and (b'ftypM4V' in data[4:11]))
 
-@add_filetype('mp4')
+@filetype('mp4')
 def is_mp4(data: bytes) -> bool:
     """
     Check if given bytes represents a MP4 file.
@@ -531,28 +464,28 @@ def is_mp4(data: bytes) -> bool:
             and data[8:12]
             in (b'mp41', b'mp42', b'isom', b'iso2', b'avc1'))
 
-@add_filetype('mpg')
+@filetype('mpg')
 def is_mpg(data: bytes) -> bool:
     """
     Check if given bytes represents a MPG file.
     """
     return (len(data) >= 4 and (data[0:4] in (b'\x00\x00\x01\xBA', b'\x00\x00\x01\xB3')))
 
-@add_filetype('ogv')
+@filetype('ogv')
 def is_ogv(data: bytes) -> bool:
     """
     Check if given bytes represents an OGV file.
     """
     return (len(data) >= 8 and data[0:8] == b'\x4F\x67\x67\x53\x00\x02\x00\x00')
 
-@add_filetype('qt')
+@filetype('qt')
 def is_qt(data: bytes) -> bool:
     """
     Check if given bytes represents a QT file.
     """
     return (len(data) >= 9 and (data[4:9] in (b'\x6D\x6F\x6F\x76\x00', b'\x6D\x64\x61\x74\x00')))
 
-@add_filetype('webm')
+@filetype('webm')
 def is_webm(data: bytes) -> bool:
     """
     Check if given bytes represents a WEBM file.
