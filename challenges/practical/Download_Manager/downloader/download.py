@@ -177,4 +177,8 @@ class Downloader:
         if not parts:
             return
         
-        return all(part.get('done') for part in parts)
+        return all(part.get('done', False) for part in parts)
+    
+    def cleanup(self):
+        if self.is_complete():
+            self.resume.delete()

@@ -111,8 +111,10 @@ def main() -> None:
             extension = guess_from_bytes(file_data)
     
     output = temp_output.with_suffix(f'.{extension}')
-    
+
     if temp_output.exists() and downloader.is_complete():
         temp_output.replace(output)
+
+    downloader.cleanup()
 
 main()
