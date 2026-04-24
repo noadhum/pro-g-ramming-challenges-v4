@@ -1,10 +1,11 @@
 import argparse
+import time
 
 from pathlib import Path
 
 from downloader.model import Input
 from downloader.download import Downloader, HTTPClient
-from downloader.utilities import random_name, read_binary, guess_from_metadata, guess_from_bytes
+from downloader.utilities import random_name, read_binary, guess_from_metadata, guess_from_bytes, format_size
 
 def cli() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -94,7 +95,9 @@ def main() -> None:
     )
     
     client = HTTPClient(args.user_agent)
+    print('Setting up session...')
     info = client.probe(user_input.url)
+    print('Probing the server...')
 
     downloader = Downloader(user_input, client, info)
     downloader.download()
@@ -111,10 +114,20 @@ def main() -> None:
             extension = guess_from_bytes(file_data)
     
     output = temp_output.with_suffix(f'.{extension}')
-
     if temp_output.exists() and downloader.is_complete():
         temp_output.replace(output)
 
+    user_input.file_path = output
+
     downloader.cleanup()
+    time.sleep(.5)
+    print(
+    f"""
+Download done!
+Result:
+    File Path: {user_input.file_path}
+    File Size: {format_size(user_input.file_path.stat().st_size)}
+    """
+    )
 
 main()

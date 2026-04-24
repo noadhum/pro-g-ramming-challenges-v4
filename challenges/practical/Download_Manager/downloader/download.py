@@ -10,6 +10,12 @@ try:
 except ImportError:
     raise ModuleNotFoundError("Error: required 'requests' library not found, install it with: 'pip install requests'")
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    raise ModuleNotFoundError("Error: required 'tqdm' library not found, install it with: 'pip install tqdm'")
+
+
 class HTTPClient:
     def __init__(self, ua: str) -> None:
         self.session = requests.Session()
@@ -65,7 +71,23 @@ class Downloader:
         self.client = client
         self.info = info
         self.resume = Resume(self.input.resume_path)
-        Validator(self.input, self.info).validate()
+
+        validator = Validator(self.input, self.info)
+        validator.validate()
+
+        self.progress_bar = tqdm(
+            total=self.info.length,
+            leave=False,
+            unit='B',
+            unit_scale=True,
+            unit_divisor=1024,
+            desc='Downloading',
+            initial=(
+                self.input.file_path.stat().st_size
+                if self.input.file_path.exists()
+                else 0
+            )
+        )
 
     def single_thread(self):
         """
@@ -83,6 +105,8 @@ class Downloader:
             for chunk in response.iter_content(self.input.chunk_size * 1024):
                 if chunk:
                     f.write(chunk)
+                    self.progress_bar.update(len(chunk))
+
     
     def _download_part(self, part: Dict[str, int]):
         """
@@ -110,6 +134,7 @@ class Downloader:
                 if chunk:
                     f.write(chunk)
                     buffer += len(chunk)
+                    self.progress_bar.update(len(chunk))
                 
                 if buffer >= size:
                     self.resume.update_part(index, buffer)
@@ -177,7 +202,8 @@ class Downloader:
         if not parts:
             return
         
-        return all(part.get('done', False) for part in parts)
+        return (all(part.get('done', False) for part in parts)
+                and (self.input.file_path.stat().st_size == self.info.length))
     
     def cleanup(self):
         if self.is_complete():

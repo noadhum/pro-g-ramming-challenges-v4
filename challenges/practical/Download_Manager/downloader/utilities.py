@@ -202,9 +202,9 @@ def random_name(length: int = 8) -> str:
         ])
     )
 
-def format_size(num: float) -> str:
+def format_size(num: int | float) -> str:
     i = 0
-    units = ['KB', 'MB', 'GB', 'TB']
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
     while num >= 1024 and i < len(units) - 1:
         num /= 1024
         i += 1
