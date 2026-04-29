@@ -1,5 +1,7 @@
 from typing import List, Optional, Tuple
 
+from visual.object import Main
+
 class Node:
     def __init__(self, x: int, y: int, parent: Optional[Node] = None) -> None:
         self.x = x
@@ -26,3 +28,5 @@ class Node:
             neighbors.append((nx, ny))
         return neighbors
 
+main = Main()
+main.run()
