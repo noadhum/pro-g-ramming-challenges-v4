@@ -11,6 +11,7 @@ pg.init()
 pg.font.init()
 
 from .settings import settings
+from .utilities import to_index, to_grid_coordinate, in_bounds
 
 class GameObject(pg.sprite.Sprite):
     def __init__(self, size, pos, color, group):
@@ -31,27 +32,63 @@ class PuzzleState:
         self.order = order
         self.current_tiles = list(range(1, order ** 2)) + [0]
         self.goal_state = self.current_tiles.copy()
-    
-    def is_solved(self):
-        return self.current_tiles == self.goal_state
-    
-    def find_empty(self):
-        index = self.current_tiles.index(0)
-        return divmod(index, self.order)
-    
-    def move(self, direction):
-        directions = {
+
+        self.directions = {
             'up': (-1, 0),
             'down': (1, 0),
             'left': (0, -1),
             'right': (0, 1)
         }
+    
+    def find_empty(self):
+        index = self.current_tiles.index(0)
+        return to_grid_coordinate(index, self.order)
+    
+    def is_solved(self):
+        return self.current_tiles == self.goal_state
 
-        if direction.lower() not in directions:
-            return
-        
+    def can_move(self, direction):
+        # TODO: A function that does check if current state can move into given direction,
+        # returns True/False i think, bcuz this is a checker
+        pass
+    
+    def swap(self, index1, index2):
+        self.current_tiles[index1], self.current_tiles[index2] = self.current_tiles[index2], self.current_tiles[index1]
+    
+    def move(self, direction):
+        if direction.lower() not in self.directions:
+            return False
+
+        delta_row, delta_col = self.directions[direction.lower()]
         empty_row, empty_col = self.find_empty()
 
+        new_row = empty_row + delta_row
+        new_col = empty_col + delta_col
+
+        if in_bounds(new_row, new_col, self.order):
+            self.swap(
+                to_index(empty_row, empty_col, self.order),
+                to_index(new_row, new_col, self.order)
+            )
+            return True
+        return False
+    
+    def shuffle(self):
+        # TODO: A function that does shuffle the board,
+        # No Repetitive (False Random) ex after 'up' it goes 'down' -> wasting moves/turns
+        # get possible choices then random.choice() or smh like that
+
+        shuffle_moves = self.order * self.order * 10
+        last_move = ''
+
+        possible_moves = []
+
+        for direction in self.directions:
+            if self.move(direction):
+                possible_moves.append(direction)
+        
+        choice = random.choice(possible_moves)
+        last_move = choice
         
 class Board(GameObject):
     def __init__(self, order, group):
