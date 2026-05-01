@@ -1,6 +1,5 @@
-import random
-
 from sys import exit
+from typing import List, Tuple, Union
 
 try:
     import pygame as pg
@@ -10,99 +9,36 @@ except ImportError:
 pg.init()
 pg.font.init()
 
-from .settings import settings
-from .utilities import to_index, to_grid_coordinate, in_bounds
+from visual.settings import settings
+from puzzle_solver.puzzle_state import PuzzleState
 
 class GameObject(pg.sprite.Sprite):
-    def __init__(self, size, pos, color, group):
+    def __init__(self, size: Tuple[int, int], pos: Tuple[int, int], color: Union[Tuple[int, int, int], str], group: pg.sprite.Group[GameObject]):
         super().__init__(group)
 
         self.size = size
         self.pos = pos
         self.group = group
 
-        self.image = pg.Surface(size, pg.SRCALPHA)
+        self.image: pg.Surface = pg.Surface(size, pg.SRCALPHA)
         self.image.fill(color)
-        self.rect = self.image.get_rect(topleft=pos)
+        self.rect: pg.Rect = self.image.get_rect(topleft=pos)
 
         self.outline = pg.draw.rect(self.image, settings.OUTLINE_COLOR, self.image.get_rect(), 1)
-
-class PuzzleState:
-    def __init__(self, order):
-        self.order = order
-        self.current_tiles = list(range(1, order ** 2)) + [0]
-        self.goal_state = self.current_tiles.copy()
-
-        self.directions = {
-            'up': (-1, 0),
-            'down': (1, 0),
-            'left': (0, -1),
-            'right': (0, 1)
-        }
-    
-    def find_empty(self):
-        index = self.current_tiles.index(0)
-        return to_grid_coordinate(index, self.order)
-    
-    def is_solved(self):
-        return self.current_tiles == self.goal_state
-
-    def can_move(self, direction):
-        # TODO: A function that does check if current state can move into given direction,
-        # returns True/False i think, bcuz this is a checker
-        pass
-    
-    def swap(self, index1, index2):
-        self.current_tiles[index1], self.current_tiles[index2] = self.current_tiles[index2], self.current_tiles[index1]
-    
-    def move(self, direction):
-        if direction.lower() not in self.directions:
-            return False
-
-        delta_row, delta_col = self.directions[direction.lower()]
-        empty_row, empty_col = self.find_empty()
-
-        new_row = empty_row + delta_row
-        new_col = empty_col + delta_col
-
-        if in_bounds(new_row, new_col, self.order):
-            self.swap(
-                to_index(empty_row, empty_col, self.order),
-                to_index(new_row, new_col, self.order)
-            )
-            return True
-        return False
-    
-    def shuffle(self):
-        # TODO: A function that does shuffle the board,
-        # No Repetitive (False Random) ex after 'up' it goes 'down' -> wasting moves/turns
-        # get possible choices then random.choice() or smh like that
-
-        shuffle_moves = self.order * self.order * 10
-        last_move = ''
-
-        possible_moves = []
-
-        for direction in self.directions:
-            if self.move(direction):
-                possible_moves.append(direction)
-        
-        choice = random.choice(possible_moves)
-        last_move = choice
         
 class Board(GameObject):
-    def __init__(self, order, group):
+    def __init__(self, order: int, group: pg.sprite.Group[GameObject]):
         super().__init__(settings.BOARD_SIZE, settings.BOARD_POS, settings.BOARD_COLOR, group)
         self.rect = self.image.get_rect(center=self.pos)
         self.order = order
 
         self.tiles = PuzzleState(self.order)
 
-        self.tiles_sprite = []
+        self.tiles_sprite: List[Tile] = []
         self.tile_dim = settings.BOARD_DIM // self.order
         self.tile_size = (self.tile_dim, self.tile_dim)
 
-        self.shuffle()
+        self.shuffle_board()
         self.create_tiles()
         
     def create_tiles(self):
@@ -119,8 +55,8 @@ class Board(GameObject):
             current_tile = Tile(self.tile_size, pos, row, col, self.order, tile, self.group)
             self.tiles_sprite.append(current_tile)
     
-    def shuffle(self):
-        random.shuffle(self.tiles.current_tiles)
+    def shuffle_board(self):
+        self.tiles.shuffle()
 
         for tile in self.tiles_sprite:
             tile.kill()
@@ -128,7 +64,7 @@ class Board(GameObject):
         self.create_tiles()
 
 class Tile(GameObject):
-    def __init__(self, size, pos, row, col, order, number, group):
+    def __init__(self, size: Tuple[int, int], pos: Tuple[int, int], row: int, col: int, order: int, number: int, group: pg.sprite.Group[GameObject]):
         super().__init__(size, pos, settings.TILE_COLOR, group)
         self.row = row
         self.col = col
@@ -149,7 +85,7 @@ class Main:
         self.window = pg.display.set_mode(settings.WINDOW_SIZE)
         self.display = pg.Surface(settings.WINDOW_SIZE)
         self.clock = pg.time.Clock()
-        self.objects = pg.sprite.Group()
+        self.objects: pg.sprite.Group[GameObject] = pg.sprite.Group()
 
         self.board = Board(3, self.objects)
 
@@ -174,7 +110,7 @@ class Main:
                         exit()
                     
                     if event.key == pg.K_r:
-                        self.board.shuffle()
+                        self.board.shuffle_board()
             
             self.window.blit(pg.transform.scale(self.display, self.window.get_size()), (0, 0))
             pg.display.update()
