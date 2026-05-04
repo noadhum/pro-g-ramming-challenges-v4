@@ -1,6 +1,10 @@
 from __future__ import annotations
 from typing import List, Optional, Tuple
 
+import heapq
+
+from .puzzle import PuzzleLogic
+
 class Node:
     """
     Represents an A* (A-star) state.
@@ -9,18 +13,16 @@ class Node:
     - state: The board state.
     - move: The move taken to this state.
     - parent: The state's parent.
-    - g: Total empty tile's (0) move.
-    - h: Total of misplaced tiles.
     """
-    def __init__(self, state: List[int], move: Optional[str], parent: Optional[Node], g: int = 0, h: int = 0) -> None:
+    def __init__(self, state: List[int], move: Optional[str], parent: Optional[Node], g: int = 0) -> None:
         self.state = tuple(state)
         self.move = move
         self.parent = parent
 
-        self.f = g + h
         self.g = g
-        self.h = h
-
+        self.h = PuzzleLogic.manhattan(list(self.state))
+        self.f = self.g + self.h
+    
 class Solver:
     """
     A n-Puzzle Solver.
