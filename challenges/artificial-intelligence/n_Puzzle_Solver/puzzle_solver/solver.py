@@ -25,6 +25,7 @@ class Node:
 class Solver:
     """
     A n-Puzzle Solver.
+    Using A* Search Algorithm to solve a n-Puzzle.
 
     Arguments:
     - initial_state: Initial state of the n-Puzzle's game board.
