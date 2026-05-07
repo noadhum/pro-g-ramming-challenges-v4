@@ -13,7 +13,7 @@ class Puzzle:
     """
     Represents a n-Puzzle board.
 
-    Arguments:
+    Args:
     - size: The board (row and col) size.
     """
     def __init__(self, size: int) -> None:
@@ -33,15 +33,46 @@ class PuzzleLogic:
     @staticmethod
     def is_solved(state: List[int], goal_state: List[int]):
         """
-        Check if given state is solved.
+        Check if board state matches the goal state.
+
+        Args:
+            state (List[int]): A board state
+            goal_state (List[int]): The board's goal state.
+
+        Returns:
+            bool: True if state matches the goal state, otherwise False
         """
         return state == goal_state
 
     @staticmethod
     def get_neighbors(state: List[int]) -> List[Tuple[List[int], str]]:
         """
-        Return all valid moves and their resulting states from the given state.
+        Get valid neighbors from given state.
+
+        Args:
+            state (List[int]): A board state.
+        
+        Returns:
+            List[Tuple[List[int], str]]: A list containing valid moves and their resulting states.
         """
+
+        # Example:
+        # Input:
+        #  [1, 2, 3,
+        #   4, 5, 6,
+        #   7, 8, 0]
+        #   
+        # Output:
+        # [
+        #   ([1, 2, 3
+        #     4, 5, 0,
+        #     7, 8, 6], 'up'),
+        #
+        #   ([1, 2, 3,
+        #     4, 5, 6,
+        #     7, 0, 8], 'left')
+        # ]
+
         neighbors: List[Tuple[List[int], str]] = []
         for direction in DIRECTIONS:
             new_state = state.copy()
@@ -51,24 +82,158 @@ class PuzzleLogic:
         return neighbors
     
     @staticmethod
+    def heuristic(state: List[int]):
+        """
+        Get the heuristic (h) cost of a state using Manhattan Distance and Linear Conflict.
+
+        Args:
+            state (List[int]): A board state.
+        
+        Returns:
+            int: The state heuristic (h) cost.
+        """
+        return PuzzleLogic.manhattan(state) + 2 * PuzzleLogic.linear_conflict(state)
+    
+    @staticmethod
     def manhattan(state: List[int]) -> int:
         """
-        Get the manhattan distance from given state to goal state.
-        """
-        size = get_board_size(state)
+        Find how far a board is from its goal (Manhattan Distance).
 
+        Args:
+            state (List[int]): A board state.
+        
+        Returns:
+            int: The manhattan distance of a board.
+        """
         total = 0
         for index, tile in enumerate(state):
             if tile != 0:
-                row, col = index_to_grid_coordinate(index, size)
-                goal_row, goal_col = index_to_grid_coordinate(tile - 1, size)
-                total += abs(row - goal_row) + abs(col - goal_col)
+                total += PuzzleLogic.manhattan_tile(state, tile, index)
         return total
+    
+    @staticmethod
+    def manhattan_tile(state: List[int], tile: int, current_tile_index: int) -> int:
+        """
+        Find how far a tile is from its goal (Manhattan Distance).
+
+        Args:
+            state (List[int]): A board state.
+            tile (int): The number on the tile.
+            current_tile_index: Where the is at right now.
+        
+        Returns:
+            int: The manhattan distance of a tile.
+        """
+        size = get_board_size(state)
+
+        row, col = index_to_grid_coordinate(current_tile_index, size)
+        goal_row, goal_col = PuzzleLogic.get_goal_coordinate(tile, size)
+        return abs(row - goal_row) + abs(col - goal_col)
+    
+    @staticmethod
+    def linear_conflict(state: List[int]) -> int:
+        """
+        Get the linear conflict from given state.
+
+        Args:
+            state (List[int]): A board state.
+        
+        Returns:
+            int: The conflict amount of a state
+        """
+        size = get_board_size(state)
+        return PuzzleLogic._row_conflict(state, size) + PuzzleLogic._col_conflict(state, size)
 
     @staticmethod
-    def shuffle(state: List[int]):
+    def _row_conflict(state: List[int], size: int) -> int:
         """
-        Returns a new shuffled board state.
+        Get the linear conflict from given row state:
+
+        Args:
+            state (List[int]): A board state.
+            size (int): The board size.
+        
+        Returns:
+            int: The conflict amount of a row state.
+        """
+        row_conflict = 0
+
+        for row in range(size):
+            valid_row_tiles: List[int] = []
+
+            for col in range(size):
+                current_index = grid_coordinate_to_index(row, col, size)
+                tile = state[current_index]
+
+                if tile == 0:
+                    continue
+
+                goal_row, goal_col = PuzzleLogic.get_goal_coordinate(tile, size)
+
+                if goal_row == row:
+                    valid_row_tiles.append(goal_col)
+        
+            for current_index, current_goal_col in enumerate(valid_row_tiles):
+                for next_goal_col in valid_row_tiles[current_index+1:]:
+                    if current_goal_col > next_goal_col:
+                        row_conflict += 1
+        return row_conflict
+
+    @staticmethod
+    def _col_conflict(state: List[int], size: int) -> int:
+        """
+        Get the linear conflict from given column state.
+
+        Args:
+            state (List[int]): A board state.
+            size (int): The board size.
+        
+        Returns:
+            int: The conflict amount of a column state.
+        """
+        column_conflict = 0
+
+        for col in range(size):
+            valid_col_tiles: List[int] = []
+
+            for row in range(size):
+                current_index = grid_coordinate_to_index(row, col, size)
+                tile = state[current_index]
+
+                if tile == 0:
+                    continue
+
+                goal_row, goal_col = PuzzleLogic.get_goal_coordinate(tile, size)
+
+                if goal_col == col:
+                    valid_col_tiles.append(goal_row)
+
+            for current_index, current_goal_row in enumerate(valid_col_tiles):
+                for next_goal_row in valid_col_tiles[current_index+1:]:
+                    if current_goal_row > next_goal_row:
+                        column_conflict += 1
+        return column_conflict
+    
+    @staticmethod
+    def get_goal_coordinate(tile: int, size: int) -> Tuple[int, int]:
+        """
+        Get the goal position of a tile.
+        """
+        if tile == 0:
+            raise ValueError('Empty tile (0) does not have a goal coordinate.')
+
+        return index_to_grid_coordinate(tile - 1, size)
+
+    @staticmethod
+    def shuffle(state: List[int]) -> List[int]:
+        """
+        Generates a new solvable shuffled board.
+
+        Args:
+            state (List[int]): A board to shuffle, eg. [1, 2, 3, 0]
+        
+        Returns:
+            List[int]: A new list containing shuffled tiles.
         """
         size = get_board_size(state)
 
@@ -98,13 +263,23 @@ class PuzzleLogic:
     @staticmethod
     def move(state: List[int], direction: str):
         """
-        Moving empty tile in state to given direction.
+        Moving an empty tile in a state to given direction.
+
+        Args:
+            state (List[int]): A board state.
+            direction (str): A direction in ['up', 'down', 'left', 'right'].
+        
+        Returns:
+            bool: True if empty tile successfully move into that direction, otherwise False
         """
         size = get_board_size(state)
         return PuzzleLogic._move(state, direction, size)
 
     @staticmethod
     def _move(state: List[int], direction: str, size: int):
+        """
+        Move an empty tile into its direction.
+        """
         direction = direction.lower()
         if direction not in DIRECTIONS:
             return False
@@ -148,7 +323,7 @@ class PuzzleLogic:
         """
         empty_index = state.index(0)
         return index_to_grid_coordinate(empty_index, size)
-
+    
 # -- Helper --
 def index_to_grid_coordinate(index: int, board_size: int) -> Tuple[int, int]:
     """
