@@ -204,6 +204,7 @@ programming challenges.png
 self_explanation.txt
 old_*
 test.*
-tests
+pbl
+pbl.*
 
 # End of optimized .gitignore
