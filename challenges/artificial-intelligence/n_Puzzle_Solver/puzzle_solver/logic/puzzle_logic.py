@@ -213,7 +213,7 @@ def shuffle(state: List[int]) -> List[int]:
     size = get_board_size(state)
 
     new_state = state.copy()
-    shuffle_amount = size ** 2 * 10
+    shuffle_amount = size ** 2 * random.randint(9, 18)
     last_move = None
 
     reverse = {

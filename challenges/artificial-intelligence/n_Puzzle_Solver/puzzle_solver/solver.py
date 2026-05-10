@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import heapq
 
@@ -13,10 +13,10 @@ class Node:
     Represents an A* (A-star) state.
 
     Args:
-    - state: The board state.
-    - parent: The state's parent.
-    - move: Move taken to reach this state.
-    - g: Depth of node/Total move of empty tile (0).
+        state: The board state.
+        parent: The state's parent.
+        move: Move taken to reach this state.
+        g: Depth of node/Total move of empty tile (0).
     """
     state: Sequence[int]
     parent: Optional[Node] = None
@@ -46,7 +46,7 @@ class Node:
         return node_neighbors
     
     def __lt__(self, other: Node):
-        return self.f < other.f or self.h < other.h
+        return (self.f, self.h, self.g) < (other.f, other.h, other.g)
     
     def __repr__(self) -> str:
         return f"Node(f={self.f}, g={self.g}, h={self.h}, state={self.state}, move='{self.move}')"
@@ -64,9 +64,6 @@ class NodeQueue:
     def __bool__(self):
         return bool(self.queue)
     
-    def __contains__(self, item: Node):
-        return any(item == node[-1] for node in self.queue)
-    
     def __repr__(self) -> str:
         if not self.queue:
             return 'NodeQueue([])'
@@ -80,28 +77,53 @@ class Solver:
     Using A* Search Algorithm to solve a n-Puzzle.
 
     Args:
-    - start: Initial state of the n-Puzzle's game board.
+        start: Initial state of the n-Puzzle's game board.
     """
     def __init__(self, start: List[int]) -> None:
         self.start = start
     
-    def solve(self):
-        self.pending = NodeQueue()
-        self.proccessed: set[Sequence[int]] = set()
+    def solve(self) -> List[str]:
+        """
+        Solve a intial state to goal state.
 
-        self.pending.push(Node(self.start))
+        Returns:
+    
+        """
+        self.open_set = NodeQueue()
+        self.closed_set: set[Sequence[int]] = set()
+        self.g_score: Dict[Sequence[int], int] = {}
 
-        while self.pending:
-            current_node = self.pending.pop()
-            self.proccessed.add(current_node.state)
+        start_node = Node(self.start)
+        self.open_set.push(start_node)
+        self.g_score[start_node.state] = 0
+
+        while self.open_set:
+            current_node = self.open_set.pop()
+            if current_node.state in self.closed_set:
+                continue
+            
+            self.closed_set.add(current_node.state)
 
             if current_node.solved:
-                return # return the moves to reach goal state
+                return self._reconstruct_path(current_node)
             
             for neighbor in current_node.neighbors:
-                if neighbor.state in self.proccessed:
+                if neighbor.state in self.closed_set:
                     continue
 
-                if current_node > neighbor or neighbor not in self.pending:
-                    if neighbor not in self.pending:
-                        self.pending.push(neighbor)
+                if neighbor.state not in self.g_score or neighbor.g < self.g_score[neighbor.state]:
+                    self.g_score[neighbor.state] = neighbor.g
+                    self.open_set.push(neighbor)
+        return []
+    
+    @staticmethod
+    def _reconstruct_path(goal_node: Node):
+        path: List[str] = []
+
+        node = goal_node
+        while node.parent:
+            if node.move:
+                path.append(node.move)
+                node = node.parent
+        path.reverse()
+        return path
