@@ -12,6 +12,9 @@ class Puzzle:
     def __init__(self, size: int, state: Optional[List[int]] = None) -> None:
         self.size = size
         self.state = state or puzzle_logic.shuffle(list(range(1, self.size ** 2)) + [0])
+    
+    def __str__(self) -> str:
+        return str(self.state)
 
     def solved(self):
         return puzzle_logic.is_solved(self.state)

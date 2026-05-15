@@ -22,12 +22,14 @@ def cli() -> argparse.Namespace:
 def main() -> None:
     args = cli()
 
-    puzzle = Puzzle(3, args.p_puzzle).state or Puzzle(3).state
+    puzzle = Puzzle(3, args.p_puzzle) or Puzzle(3)
 
-    if len(puzzle) != 9:
+    if len(puzzle.state) != 9:
         raise ValueError("'puzzle' must have length of 9.")
     
-    moves = Solver(puzzle).solve()
+    print(f'Input: {puzzle}')
+    
+    moves = Solver(puzzle.state).solve()
 
     print('Finding optimal path...\n')
 
