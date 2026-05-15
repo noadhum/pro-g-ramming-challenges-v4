@@ -207,4 +207,9 @@ test.*
 pbl
 pbl.*
 
+# ------------------------------------------------------------------------------
+# Additional
+main
+*.dSYM
+
 # End of optimized .gitignore
