@@ -1,13 +1,33 @@
-#ifndef MORSE
-#define MORSE
+#ifndef MORSE_HEADER
+#define MORSE_HEADER
 
-/****************************************
-* Functions
-****************************************/
+//-----------------------------------------------
+// Includes
+//-----------------------------------------------
 
-int get_prosign_idx(char *prosign);
+#include <string.h>
 
-char* encode_morse(char *arr[], int arr_size);
-char* decode_morse(char *arr[], int arr_size);
+//-----------------------------------------------
+// Types and Structures
+//-----------------------------------------------
+
+typedef struct {
+    int arrSize;
+    int arrStart;
+    char **arr;
+} Input;
+
+typedef struct {
+    char *data;
+    size_t size;
+    size_t capacity;
+} ResultText;
+
+//-----------------------------------------------
+// Functions
+//-----------------------------------------------
+
+ResultText EncodeMorse(Input input);
+ResultText DecodeMorse(Input input);
 
 #endif
